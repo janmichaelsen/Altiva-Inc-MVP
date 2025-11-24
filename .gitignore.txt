@@ -1,0 +1,14 @@
+# Ignorar dependencias en cualquier subcarpeta
+node_modules/
+package-lock.json
+
+# Ignorar variables de entorno (CRÍTICO)
+.env
+
+# Ignorar archivos de sistema y logs
+.DS_Store
+dist/
+build/
+coverage/
+.vscode/
+*.log

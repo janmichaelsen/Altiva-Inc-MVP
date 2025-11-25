@@ -1,0 +1,28 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "Administrador",
+      "email": "admin@altiva.cl",
+      "password": "123",
+      "role": "admin",
+      "picture": ""
+    },
+    {
+      "id": 1764054534360,
+      "name": "carlos",
+      "email": "carlos@gmail.com",
+      "password": "123456",
+      "role": "client",
+      "picture": ""
+    },
+    {
+      "id": 1764054548147,
+      "name": "pipe alvarez",
+      "email": "felipealvarezmer@gmail.com",
+      "password": "",
+      "role": "client",
+      "picture": "https://lh3.googleusercontent.com/a/ACg8ocIGlIuLRMXhAiv9oVNwl4kKfsF7hYvIO54tl8kLo3gkc9uj8P1WiQ=s96-c"
+    }
+  ],
+  "re

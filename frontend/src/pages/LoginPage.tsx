@@ -3,6 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Mail, Loader2, AlertCircle, ArrowLeft, UserPlus } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+// 1. AGREGADO: Imports de Google
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from "jwt-decode";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -14,7 +17,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      const res = await fetch('http://localhost:3000/api/auth/login', {
+      const res = await fetch('http://localhost:3001/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
@@ -31,6 +34,44 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+// iniciar con google
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    try {
+      // 1. Decodificamos la info que nos da Google
+      const decoded: any = jwtDecode(credentialResponse.credential);
+      console.log("Login Google exitoso:", decoded);
+      
+      // 2. [EL CAMBIO CLAVE] Avisamos al Backend para que lo guarde en database.json
+      await fetch('http://localhost:3001/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email: decoded.email,   // Guardamos el correo
+            name: decoded.name,     // Guardamos el nombre
+            picture: decoded.picture
+        })
+      });
+
+      // 3. Guardamos en el navegador para que la página funcione
+      const userData = {
+        name: decoded.name,
+        email: decoded.email,
+        picture: decoded.picture,
+        role: 'client'
+      };
+
+      localStorage.setItem('token', credentialResponse.credential);
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      // 4. Entramos
+      navigate('/dashboard');
+      window.location.reload(); 
+    } catch (error) {
+      console.error("Error Google", error);
+      setError('Error al sincronizar con Google.');
+    }
+  };;
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative">
@@ -90,9 +131,30 @@ export default function LoginPage() {
             </Button>
           </form>
 
+          {/* 3. AGREGADO: Separador visual */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-2 text-slate-500">O ingresa con</span>
+            </div>
+          </div>
+
+          {/* 4. AGREGADO: Botón de Google */}
+          <div className="flex justify-center w-full">
+            <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => setError('Login fallido')}
+                useOneTap
+                theme="outline"
+                size="large"
+                width="350"
+            />
+          </div>
+
           <div className="mt-8 pt-6 border-t border-slate-100 text-center">
             <p className="text-slate-600 text-sm mb-3">¿Aún no es cliente?</p>
-            {/* ESTE LINK APUNTA A /register */}
             <Link to="/register" className="inline-flex items-center justify-center gap-2 w-full py-2.5 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors">
               <UserPlus size={18} />
               Crear una cuenta

@@ -9,8 +9,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Mantenemos 'company_rut' internamente para compatibilidad con la BD, 
-  // pero guardaremos el nombre ahí.
+  // 'company_rut' guarda el nombre de la empresa para mantener compatibilidad con la BD
   const [form, setForm] = useState({ name: '', email: '', password: '', company_rut: '' });
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -18,7 +17,8 @@ export default function RegisterPage() {
     setLoading(true); setError('');
 
     try {
-      const res = await fetch('http://localhost:3001/api/auth/register', {
+      // CAMBIO CRÍTICO: Asegúrate de que diga 3000, NO 3001
+      const res = await fetch('http://localhost:3000/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
@@ -28,8 +28,12 @@ export default function RegisterPage() {
       
       if (!res.ok) throw new Error(data.error || 'Error al registrarse');
 
-      alert('Cuenta creada exitosamente. Ahora puede iniciar sesión.');
-      navigate('/login');
+      // Guardamos token y redirigimos directo al Dashboard (Auto-Login)
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      alert('Cuenta creada exitosamente. Bienvenido a Altiva Inc.');
+      navigate('/dashboard');
 
     } catch (err: any) {
       setError(err.message);

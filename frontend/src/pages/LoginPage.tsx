@@ -3,9 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Mail, Loader2, AlertCircle, ArrowLeft, UserPlus } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
-// 1. AGREGADO: Imports de Google
-import { GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from "jwt-decode";
+import { GoogleLogin } from '@react-oauth/google'; // Importamos el botón real
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -13,11 +11,12 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({ email: '', password: '' });
 
+  // --- LOGIN MANUAL ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      const res = await fetch('http://localhost:3001/api/auth/login', {
+      const res = await fetch('http://localhost:3000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
@@ -29,49 +28,34 @@ export default function LoginPage() {
       localStorage.setItem('user', JSON.stringify(data.user));
       navigate(data.user.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Error de conexión. Revisa el servidor.');
+      setError(err.message || 'Error de conexión.');
     } finally {
       setLoading(false);
     }
   };
 
-// iniciar con google
+  // --- LOGIN GOOGLE (NUEVO) ---
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
-      // 1. Decodificamos la info que nos da Google
-      const decoded: any = jwtDecode(credentialResponse.credential);
-      console.log("Login Google exitoso:", decoded);
-      
-      // 2. [EL CAMBIO CLAVE] Avisamos al Backend para que lo guarde en database.json
-      await fetch('http://localhost:3001/api/auth/google', {
+      // Enviamos el token de Google al backend para validarlo y crear sesión
+      const res = await fetch('http://localhost:3000/api/auth/google', { // OJO: Puerto 3000
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            email: decoded.email,   // Guardamos el correo
-            name: decoded.name,     // Guardamos el nombre
-            picture: decoded.picture
-        })
+        body: JSON.stringify({ token: credentialResponse.credential })
       });
-
-      // 3. Guardamos en el navegador para que la página funcione
-      const userData = {
-        name: decoded.name,
-        email: decoded.email,
-        picture: decoded.picture,
-        role: 'client'
-      };
-
-      localStorage.setItem('token', credentialResponse.credential);
-      localStorage.setItem('user', JSON.stringify(userData));
       
-      // 4. Entramos
-      navigate('/dashboard');
-      window.location.reload(); 
-    } catch (error) {
-      console.error("Error Google", error);
-      setError('Error al sincronizar con Google.');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error con Google');
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      navigate('/dashboard'); // Asumimos que Google es siempre cliente
+
+    } catch (err: any) {
+      console.error("Google Error:", err);
+      setError("Error al iniciar con Google. Intente manualmente.");
     }
-  };;
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative">
@@ -94,64 +78,42 @@ export default function LoginPage() {
             </div>
           )}
 
+          {/* BOTÓN GOOGLE */}
+          <div className="flex justify-center mb-6">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError('Falló el inicio con Google')}
+              useOneTap
+              shape="circle"
+              theme="outline"
+              width="300"
+            />
+          </div>
+
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-200" /></div>
+            <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-400">O con email</span></div>
+          </div>
+
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 text-slate-400" size={18} />
-                <input 
-                  type="email" 
-                  placeholder="nombre@empresa.com" 
-                  className="w-full pl-10 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-transparent outline-none transition-all" 
-                  value={form.email} 
-                  onChange={e => setForm({...form, email: e.target.value})} 
-                />
+                <input type="email" className="w-full pl-10 p-2.5 border border-slate-300 rounded-lg outline-none focus:border-blue-900 transition-all" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
               </div>
             </div>
-
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-slate-700">Contraseña</label>
-                <a href="#" className="text-xs text-blue-700 hover:underline">¿Olvidó su contraseña?</a>
-              </div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 text-slate-400" size={18} />
-                <input 
-                  type="password" 
-                  placeholder="••••••••" 
-                  className="w-full pl-10 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-900 focus:border-transparent outline-none transition-all" 
-                  value={form.password} 
-                  onChange={e => setForm({...form, password: e.target.value})} 
-                />
+                <input type="password" className="w-full pl-10 p-2.5 border border-slate-300 rounded-lg outline-none focus:border-blue-900 transition-all" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
               </div>
             </div>
-
             <Button type="submit" className="w-full bg-blue-900 hover:bg-blue-800 py-6 text-base" disabled={loading}>
               {loading ? <Loader2 className="animate-spin" /> : 'Iniciar Sesión'}
             </Button>
           </form>
-
-          {/* 3. AGREGADO: Separador visual */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-slate-200" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-slate-500">O ingresa con</span>
-            </div>
-          </div>
-
-          {/* 4. AGREGADO: Botón de Google */}
-          <div className="flex justify-center w-full">
-            <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setError('Login fallido')}
-                useOneTap
-                theme="outline"
-                size="large"
-                width="350"
-            />
-          </div>
 
           <div className="mt-8 pt-6 border-t border-slate-100 text-center">
             <p className="text-slate-600 text-sm mb-3">¿Aún no es cliente?</p>
@@ -159,10 +121,6 @@ export default function LoginPage() {
               <UserPlus size={18} />
               Crear una cuenta
             </Link>
-          </div>
-
-          <div className="mt-6 p-3 bg-slate-50 rounded text-xs text-slate-400 text-center border border-slate-100">
-            <span className="font-semibold">Acceso Demo:</span> admin@altiva.cl / cliente1@agricola.cl (Pass: 123456)
           </div>
         </CardContent>
       </Card>

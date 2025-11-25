@@ -1,166 +1,113 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { UploadCloud, FileText, Database, ArrowLeft, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { UploadCloud, FileText, Trash2, Edit, Loader2 } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { useLanguage } from '../useLanguage';
 
-export default function CreateReport() {
-  const navigate = useNavigate();
-  const [fileName, setFileName] = useState<string | null>(null);
+// Fíjate que aquí ya no hay ({ onCancel, onSuccess })
+export default function AdminDashboard() {
+  const { t } = useLanguage();
+  const [reports, setReports] = useState<any[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [reload, setReload] = useState(false);
+  const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // Estado del formulario: Ahora usamos clientEmail en lugar de solo clientId
-  const [form, setForm] = useState({ 
-    title: '', 
-    clientEmail: 'cliente1@agricola.cl', // Valor por defecto válido
-    keyData: '' 
-  });
+  const [form, setForm] = useState({ title: '', clientId: '', keyData: '' });
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+      
+      const resC = await fetch('http://localhost:3000/api/users/clients', { headers });
+      const clientsData = await resC.json();
+      setClients(clientsData);
+      if (clientsData.length > 0 && !form.clientId) setForm(prev => ({...prev, clientId: clientsData[0].id}));
+
+      const resR = await fetch('http://localhost:3000/api/reports', { headers });
+      setReports(await resR.json());
+    };
+    fetchData();
+  }, [reload]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const token = localStorage.getItem('token');
+    const url = editingId ? `http://localhost:3000/api/reports/${editingId}` : 'http://localhost:3000/api/reports';
+    const method = editingId ? 'PUT' : 'POST';
 
     try {
-      // 1. CONEXIÓN AL BACKEND (Puerto 3001)
-      const response = await fetch('http://localhost:3001/api/reportes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ 
-          titulo: form.title, 
-          clienteEmail: form.clientEmail, // Enviamos el correo del cliente
-          datosClave: form.keyData 
+          title: form.title, 
+          client_id: form.clientId, 
+          ai_context: form.keyData, 
+          file_name: fileName || "doc.pdf" 
         })
       });
-
-      if (response.ok) {
-        alert("✅ Informe asignado correctamente.");
-        navigate('/dashboard'); 
-      } else {
-        alert("Error al guardar el reporte.");
-      }
-
-    } catch (error) {
-      console.error(error);
-      alert("Error de conexión con el servidor (3001)");
-    } finally {
-      setLoading(false);
-    }
+      setEditingId(null);
+      setForm({ title: '', clientId: clients[0]?.id || '', keyData: '' });
+      setFileName(null);
+      setReload(!reload);
+      alert("Operación exitosa");
+    } catch (error) { alert("Error"); } finally { setLoading(false); }
   };
 
-  // El botón ahora no se deshabilita si no hay archivo (disabled={loading})
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar reporte?')) return;
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:3000/api/reports/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+    setReload(!reload);
+  };
+
+  const startEdit = (report: any) => {
+    setEditingId(report.id);
+    setForm({ title: report.title, clientId: report.client_id, keyData: report.ai_context || '' });
+    window.scrollTo(0,0);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-       <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
-        
-        {/* Encabezado */}
-        <div className="bg-blue-900 p-6 text-white flex justify-between items-center">
-            <div>
-                <h1 className="text-2xl font-bold">Nuevo Informe Estratégico</h1>
-                <p className="text-blue-200 text-sm">Asignar datos para análisis IA.</p>
-            </div>
-            <button onClick={() => navigate('/dashboard')} className="text-white/80 hover:text-white transition-colors">
-                <ArrowLeft />
-            </button>
-        </div>
+    <div className="max-w-4xl mx-auto p-8 bg-white rounded-xl shadow border border-slate-100">
+      <h1 className="text-2xl font-bold mb-6 text-slate-800">{editingId ? t('admin_edit') : t('admin_create')}</h1>
       
-      <form onSubmit={handleSubmit} className="p-8 space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-6 mb-12 border-b pb-8">
+        <div className="grid md:grid-cols-2 gap-4">
+          <div><label className="block text-sm font-medium mb-1">Título</label><input value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="border p-2 rounded w-full" required/></div>
+          <div><label className="block text-sm font-medium mb-1">Cliente</label><select value={form.clientId} onChange={e => setForm({...form, clientId: e.target.value})} className="border p-2 rounded w-full">{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+        </div>
+        <div className="bg-blue-50 p-4 rounded"><label className="block text-sm font-semibold text-blue-800 mb-2">Contexto IA</label><textarea value={form.keyData} onChange={e => setForm({...form, keyData: e.target.value})} className="w-full p-2 border rounded h-20" placeholder="Datos clave..."/></div>
         
-        {/* ZONA DE CARGA DE ARCHIVO (VISUAL/FAKE) */}
-        <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center bg-slate-50 hover:bg-blue-50 cursor-pointer relative transition-all group">
-          <input 
-            type="file" 
-            className="absolute inset-0 opacity-0 cursor-pointer z-10" 
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                if (e.target.files && e.target.files.length > 0) {
-                    setFileName(e.target.files[0].name);
-                }
-            }}
-          />
-          
-          {fileName ? (
-            <div className="flex flex-col items-center justify-center text-green-600">
-              <div className="bg-green-100 p-3 rounded-full mb-3">
-                <FileText size={32}/> 
-              </div>
-              <span className="font-bold text-lg">{fileName}</span>
-              <span className="text-sm text-green-700 flex items-center gap-1 mt-1">
-                <CheckCircle size={14}/> Archivo seleccionado
-              </span>
-            </div>
-          ) : (
-            <div className="text-slate-400 group-hover:text-blue-600 transition-colors">
-              <UploadCloud className="mx-auto mb-4 h-16 w-16"/>
-              <span className="font-bold text-lg text-slate-700 block">Subir PDF del Informe (Simulado)</span>
-              <p className="text-sm mt-2">Arrastra o haz clic aquí</p>
-            </div>
-          )}
-        </div>
+        {!editingId && (
+           <div className="border-2 border-dashed border-slate-300 p-4 text-center rounded relative cursor-pointer hover:bg-slate-50">
+             <input type="file" className="absolute inset-0 opacity-0" onChange={(e) => e.target.files && setFileName(e.target.files[0].name)} />
+             <div className="text-slate-500 flex flex-col items-center"><UploadCloud className="mb-2"/> {fileName || "Arrastra PDF aquí"}</div>
+           </div>
+        )}
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Título del Reporte</label>
-            <input 
-                placeholder="Ej: Análisis Cobre 2025" 
-                className="border border-slate-300 p-3 rounded-lg w-full outline-none focus:ring-2 ring-blue-900 transition-all" 
-                value={form.title} 
-                onChange={e => setForm({...form, title: e.target.value})} 
-                required
-            />
-          </div>
-          
-          {/* EL CAMBIO CRÍTICO: DE SELECT A INPUT DE EMAIL */}
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Asignar a Cliente (EMAIL)</label>
-            <input 
-                type="email" // <--- Campo de texto para el correo
-                placeholder="Ej: agricola1@gmail.com o usuario@google.com"
-                className="border border-slate-300 p-3 rounded-lg w-full outline-none focus:ring-2 ring-blue-900 transition-all" 
-                value={form.clientEmail}
-                onChange={e => setForm({...form, clientEmail: e.target.value})}
-                required
-            />
-             <p className="text-xs text-slate-400 mt-1">Debe ser el email exacto del cliente registrado.</p>
-          </div>
-          {/* FIN DEL CAMBIO */}
-        </div>
-
-        {/* DATOS CLAVE PARA LA IA */}
-        <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 relative overflow-hidden">
-          
-          <div className="flex gap-2 mb-3 font-bold text-blue-900 items-center relative z-10">
-            <Database size={20}/> Datos Clave (Contexto IA)
-          </div>
-          
-          <p className="text-sm text-blue-700 mb-3 relative z-10">
-            Escribe aquí el resumen que leerá la IA para generar el reporte final.
-          </p>
-          
-          <textarea 
-            className="w-full p-4 border border-blue-200 rounded-lg h-32 text-sm focus:ring-2 ring-blue-900 outline-none relative z-10" 
-            placeholder="Ej: Mercado saturado, precios bajos..." 
-            value={form.keyData} 
-            onChange={e => setForm({...form, keyData: e.target.value})} 
-            required
-          />
-        </div>
-
-        <div className="flex justify-end gap-4 pt-6 border-t border-slate-100">
-          <button 
-            type="button"
-            onClick={() => navigate('/dashboard')}
-            className="px-6 py-3 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-colors"
-          >
-            Cancelar
-          </button>
-          
-          <button 
-            type="submit" 
-            disabled={loading} // Ya no se bloquea si no hay archivo, solo si carga
-            className="px-8 py-3 rounded-lg bg-blue-900 text-white font-bold hover:bg-blue-800 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
-          >
-            {loading ? 'Guardando...' : 'Guardar y Asignar'}
-          </button>
+        <div className="flex gap-2 justify-end">
+          {editingId && <Button type="button" variant="outline" onClick={() => { setEditingId(null); setForm({...form, title:'', keyData:''}); }}>{t('btn_cancel')}</Button>}
+          <Button type="submit" disabled={loading}>{loading ? <Loader2 className="animate-spin"/> : t('btn_save')}</Button>
         </div>
       </form>
-    </div>
+
+      <h2 className="text-xl font-bold mb-4 text-slate-700">Reportes Activos</h2>
+      <div className="space-y-3">
+        {reports.map(report => (
+          <div key={report.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex items-center gap-3">
+              <FileText className="text-blue-600" />
+              <div><p className="font-semibold text-slate-800">{report.title}</p><p className="text-xs text-slate-500">Cliente: {report.users?.name}</p></div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => startEdit(report)} className="p-2 text-blue-600 hover:bg-blue-100 rounded" title={t('btn_edit')}><Edit size={18} /></button>
+              <button onClick={() => handleDelete(report.id)} className="p-2 text-red-600 hover:bg-red-100 rounded" title={t('btn_delete')}><Trash2 size={18} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

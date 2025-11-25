@@ -1,190 +1,186 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { LogOut, FileText, BrainCircuit, CheckCircle, AlertTriangle, Loader2, ArrowRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { FileText, Sparkles, ChevronDown, ChevronUp, AlertTriangle, TrendingUp, DollarSign, Coins, Activity } from 'lucide-react';
+import { Button } from '../components/ui/button';
+
+interface Indicator {
+  valor: number;
+  nombre: string;
+  unidad_medida: string;
+}
 
 export default function ClientDashboard() {
-  const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
-  const [reportes, setReportes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState<any[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [insight, setInsight] = useState<Record<string, string>>({});
+  const [generating, setGenerating] = useState(false);
   
-  // Estado para saber qué reporte se está analizando ahora mismo
-  const [analyzingId, setAnalyzingId] = useState<number | null>(null);
-  // Aquí guardamos los resultados de la IA (temporalmente en pantalla)
-  const [resultadosIA, setResultadosIA] = useState<Record<number, any>>({});
+  // Estado para la API Externa
+  const [indicators, setIndicators] = useState<any>(null);
+  const [loadingIndicators, setLoadingIndicators] = useState(true);
+
+  // Función para cargar reportes
+  const fetchReportes = async () => {
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    
+    console.log("Cargando reportes para:", user.email); // Debug
+
+    try {
+      const res = await fetch(`http://localhost:3000/api/reports`, { 
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        } 
+      });
+      
+      if (!res.ok) throw new Error('Error al obtener reportes');
+      
+      const data = await res.json();
+      console.log("Reportes recibidos:", data); // Debug
+      
+      if (Array.isArray(data)) {
+        setReports(data);
+      } else {
+        setReports([]);
+      }
+    } catch (err) {
+      console.error("Error cargando reportes", err);
+    }
+  };
 
   useEffect(() => {
-    // 1. Cargar usuario y sus reportes
-    const userData = localStorage.getItem('user');
-    if (!userData) {
-      navigate('/login');
-      return;
-    }
-    const parsedUser = JSON.parse(userData);
-    setUser(parsedUser);
-    fetchReportes(parsedUser.email);
+    fetchReportes();
+
+    // Cargar API Externa
+    fetch('https://mindicador.cl/api')
+      .then(res => res.json())
+      .then(data => {
+        setIndicators(data);
+        setLoadingIndicators(false);
+      })
+      .catch(err => {
+        console.error("Error cargando indicadores", err);
+        setLoadingIndicators(false);
+      });
   }, []);
 
-  const fetchReportes = async (email: string) => {
+  const generate = async (report: any) => {
+    setGenerating(true);
+    const token = localStorage.getItem('token');
     try {
-      // Pedimos al backend SOLO los reportes de este cliente
-      const res = await fetch(`http://localhost:3001/api/mis-reportes?email=${email}`);
-      const data = await res.json();
-      setReportes(data);
-    } catch (error) {
-      console.error("Error cargando reportes", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAnalizarConIA = async (reporte: any) => {
-    setAnalyzingId(reporte.id);
-    
-    try {
-      // 2. LLAMADA A LA IA (GEMINI)
-      const res = await fetch('http://localhost:3001/api/analizar', {
+      const res = await fetch('http://localhost:3000/api/ai/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          datosClave: reporte.datosClave // Le mandamos el texto que escribió el admin
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ keyData: report.ai_context })
       });
-
-      const analisis = await res.json();
-      
-      // Guardamos el resultado asociado al ID del reporte
-      setResultadosIA(prev => ({ ...prev, [reporte.id]: analisis }));
-
-    } catch (error) {
-      alert("La IA está ocupada, intenta de nuevo.");
+      const data = await res.json();
+      setInsight({ ...insight, [report.id]: data.summary });
+    } catch (e) {
+      console.error(e);
     } finally {
-      setAnalyzingId(null);
+      setGenerating(false);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate('/login');
-  };
-
-  if (!user) return null;
+  const IndicatorCard = ({ title, value, icon: Icon, color }: any) => (
+    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+      <div>
+        <p className="text-sm text-slate-500 font-medium mb-1">{title}</p>
+        <p className="text-2xl font-bold text-slate-800">
+          {value ? `$${value.toLocaleString('es-CL')}` : '...'}
+        </p>
+      </div>
+      <div className={`p-3 rounded-lg ${color}`}>
+        <Icon size={24} />
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Navbar Simple */}
-      <nav className="bg-blue-900 text-white p-4 px-8 flex justify-between items-center shadow-lg">
-        <div className="flex items-center gap-3">
-            <img src="/logoaltiva.png" alt="Altiva" className="h-8 bg-white rounded p-1"/>
-            <span className="font-bold text-lg tracking-wide">Portal Clientes</span>
+    <div className="max-w-5xl mx-auto space-y-8 py-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Hola, Cliente</h1>
+          <p className="text-slate-500">Bienvenido a tu panel de inteligencia comercial.</p>
         </div>
-        <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium">{user.name}</p>
-                <p className="text-xs text-blue-200">{user.email}</p>
-            </div>
-            <button onClick={handleLogout} className="p-2 hover:bg-blue-800 rounded-full transition-colors">
-                <LogOut size={20} />
-            </button>
+        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-1 rounded-full border border-green-100">
+          <Activity size={16} />
+          Sistema Operativo
         </div>
-      </nav>
+      </div>
 
-      <main className="max-w-5xl mx-auto p-8">
-        <header className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-800">Mis Informes Estratégicos</h1>
-            <p className="text-slate-500 mt-2">Revise los documentos asignados y genere análisis en tiempo real.</p>
-        </header>
+      <div>
+        <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+          <TrendingUp className="text-blue-600" size={20}/> Indicadores Económicos (Tiempo Real)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <IndicatorCard title="Valor Dólar (USD)" value={indicators?.dolar?.valor} icon={DollarSign} color="bg-green-100 text-green-600" />
+          <IndicatorCard title="Valor UF" value={indicators?.uf?.valor} icon={TrendingUp} color="bg-blue-100 text-blue-600" />
+          <IndicatorCard title="Valor Euro" value={indicators?.euro?.valor} icon={Coins} color="bg-indigo-100 text-indigo-600" />
+        </div>
+        <p className="text-xs text-slate-400 mt-2 text-right">Fuente: mindicador.cl API</p>
+      </div>
 
-        {loading ? (
-            <div className="text-center py-20"><Loader2 className="animate-spin mx-auto text-blue-900 mb-2"/> Cargando documentos...</div>
-        ) : reportes.length === 0 ? (
-            <div className="bg-white p-10 rounded-xl shadow text-center border border-slate-100">
-                <FileText size={48} className="mx-auto text-slate-300 mb-4"/>
-                <h3 className="text-lg font-medium text-slate-700">No tienes informes pendientes</h3>
-                <p className="text-slate-400">Cuando Altiva te asigne un documento, aparecerá aquí.</p>
-            </div>
-        ) : (
-            <div className="grid gap-6">
-                {reportes.map((repo) => (
-                    <div key={repo.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                        {/* Cabecera del Reporte */}
-                        <div className="p-6 border-b border-slate-50 flex flex-col md:flex-row justify-between md:items-center gap-4">
-                            <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded font-bold uppercase">Nuevo</span>
-                                    <span className="text-slate-400 text-sm">{repo.fecha}</span>
-                                </div>
-                                <h3 className="text-xl font-bold text-slate-800">{repo.titulo}</h3>
-                                <p className="text-sm text-slate-500 mt-1 max-w-2xl truncate">{repo.datosClave}</p>
-                            </div>
+      <hr className="border-slate-200" />
 
-                            {/* BOTÓN DE ACCIÓN IA */}
-                            {!resultadosIA[repo.id] ? (
-                                <button 
-                                    onClick={() => handleAnalizarConIA(repo)}
-                                    disabled={analyzingId === repo.id}
-                                    className="bg-blue-900 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-800 transition-all disabled:opacity-70 shadow-lg shadow-blue-900/20"
-                                >
-                                    {analyzingId === repo.id ? (
-                                        <><Loader2 className="animate-spin" size={18}/> Analizando...</>
-                                    ) : (
-                                        <><BrainCircuit size={18}/> Generar Análisis IA</>
-                                    )}
-                                </button>
-                            ) : (
-                                <div className="flex items-center gap-2 text-green-600 font-bold bg-green-50 px-4 py-2 rounded-lg border border-green-100">
-                                    <CheckCircle size={20} /> Análisis Completado
-                                </div>
-                            )}
-                        </div>
-
-                        {/* RESULTADO DE LA IA (Se despliega si existe) */}
-                        {resultadosIA[repo.id] && (
-                            <div className="bg-slate-50 p-6 animate-in slide-in-from-top-4 duration-500 border-t-4 border-blue-900">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <BrainCircuit className="text-blue-900" size={24} />
-                                    <h4 className="font-bold text-lg text-slate-800">Evaluación de Inteligencia Artificial</h4>
-                                    <span className={`ml-auto px-3 py-1 rounded-full text-sm font-bold ${
-                                        resultadosIA[repo.id].riesgo === 'Alto' ? 'bg-red-100 text-red-700' :
-                                        resultadosIA[repo.id].riesgo === 'Medio' ? 'bg-yellow-100 text-yellow-700' :
-                                        'bg-green-100 text-green-700'
-                                    }`}>
-                                        Riesgo: {resultadosIA[repo.id].riesgo}
-                                    </span>
-                                </div>
-
-                                <p className="text-slate-700 mb-6 leading-relaxed font-medium">
-                                    {resultadosIA[repo.id].conclusion}
-                                </p>
-
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    <div className="bg-white p-4 rounded-lg border border-slate-200">
-                                        <h5 className="text-xs font-bold text-green-700 uppercase mb-2 flex items-center gap-1">
-                                            <ArrowRight size={14}/> Pros / Oportunidades
-                         <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4"></ul>               </h5>
-                                        <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4">
-                                            {resultadosIA[repo.id].pros?.map((p:string, i:number) => <li key={i}>{p}</li>)}
-                                        </ul>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-lg border border-slate-200">
-                                        <h5 className="text-xs font-bold text-red-700 uppercase mb-2 flex items-center gap-1">
-                                            <AlertTriangle size={14}/> Riesgos Detectados
-                                        </h5>
-                                        <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4">
-                                            {resultadosIA[repo.id].contras?.map((c:string, i:number) => <li key={i}>{c}</li>)}
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div className="mt-4 text-right">
-                                     <span className="text-[10px] text-slate-400 uppercase tracking-widest">Análisis generado por Gemini API</span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold text-slate-900">Mis Informes Asignados</h2>
+          <Button variant="outline" size="sm" onClick={fetchReportes}>Actualizar Lista</Button>
+        </div>
+        
+        {reports.length === 0 && (
+          <div className="p-12 text-center bg-white border border-dashed border-slate-300 rounded-xl">
+            <FileText className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+            <p className="text-slate-500 font-medium">No hay reportes disponibles todavía.</p>
+            <p className="text-sm text-slate-400">Contacte a su ejecutivo en Altiva Inc.</p>
+          </div>
         )}
-      </main>
+        
+        {reports.map(report => (
+          <div key={report.id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md">
+            <div className="p-5 flex items-center justify-between cursor-pointer bg-white hover:bg-slate-50/50" onClick={() => setExpanded(expanded === report.id ? null : report.id)}>
+              <div className="flex items-center gap-4">
+                <div className="bg-blue-50 text-blue-700 p-3 rounded-lg border border-blue-100"><FileText size={24} /></div>
+                <div>
+                  <h3 className="font-semibold text-lg text-slate-800">{report.title}</h3>
+                  <p className="text-sm text-slate-500">Publicado: {new Date(report.created_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+              {expanded === report.id ? <ChevronUp className="text-slate-400" /> : <ChevronDown className="text-slate-400" />}
+            </div>
+            
+            {expanded === report.id && (
+              <div className="border-t border-slate-100 bg-slate-50/50 p-6 flex flex-col md:flex-row gap-6 animate-in slide-in-from-top-2">
+                <div className="flex-1">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider">Contexto del Analista</h4>
+                  <div className="text-sm text-slate-600 bg-white p-4 rounded-lg border border-slate-200 italic leading-relaxed">
+                    "{report.ai_context || 'Sin contexto disponible.'}"
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-xs font-bold text-purple-600 uppercase mb-2 flex items-center gap-2 tracking-wider"><Sparkles size={14}/> Altiva AI Insights</h4>
+                  {!insight[report.id] ? (
+                    <div className="text-center bg-white p-6 rounded-lg border border-purple-100 shadow-sm">
+                      <p className="mb-4 text-sm text-slate-600">Genera un resumen ejecutivo instantáneo basado en los datos del reporte.</p>
+                      <Button onClick={() => generate(report)} disabled={generating} className="bg-purple-600 hover:bg-purple-700 w-full shadow-purple-100">
+                        {generating ? 'Analizando datos...' : 'Generar Insight IA'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-lg border border-purple-200 overflow-hidden shadow-sm animate-in fade-in">
+                      <div className="p-4 bg-purple-50 text-sm text-slate-800 leading-relaxed">{insight[report.id]}</div>
+                      <div className="bg-amber-50 p-2 text-xs text-amber-800 flex items-center gap-2 border-t border-amber-100 px-4">
+                        <AlertTriangle size={12}/> Disclaimer: Generado por IA. Verificar con consultor humano.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

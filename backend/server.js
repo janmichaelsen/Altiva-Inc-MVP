@@ -11,7 +11,7 @@ app.use(express.json());
 
 // Ruta para el formulario de contacto
 app.post('/api/contact', async (req, res) => {
-  const { name, email, subject, message } = req.body;
+  const { name, email, subject, phone, message } = req.body;
 
   if (!name || !email || !message) {
     return res.status(400).json({ error: 'Faltan campos requeridos.' });
@@ -32,11 +32,13 @@ app.post('/api/contact', async (req, res) => {
       from: email,
       to: process.env.EMAIL_USER, // O el correo al que quieres que lleguen los mensajes
       subject: `Nuevo mensaje de Contacto: ${subject || 'Sin asunto'}`,
-      text: `Has recibido un nuevo mensaje de contacto:\n\nNombre: ${name}\nEmail: ${email}\nMensaje:\n${message}`,
+      text: `Has recibido un nuevo mensaje de contacto:\n\nNombre: ${name}\nEmail: ${email}\nEmpresa: ${subject || 'No indicada'}\nTeléfono / WhatsApp: ${phone || 'No indicado'}\nMensaje:\n${message}`,
       html: `<p>Has recibido un nuevo mensaje de contacto:</p>
              <ul>
                <li><strong>Nombre:</strong> ${name}</li>
                <li><strong>Email:</strong> ${email}</li>
+               <li><strong>Empresa:</strong> ${subject || 'No indicada'}</li>
+               <li><strong>Teléfono / WhatsApp:</strong> ${phone || 'No indicado'}</li>
              </ul>
              <p><strong>Mensaje:</strong></p>
              <p>${message}</p>`,
